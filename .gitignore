@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+
+# internal continuity notes — not part of the public release
+HANDOFF.md

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Story Mode — choose-your-own-adventure for AI coding</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Monoton&family=VT323&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #05060c;
+        --ink-2: #0b0f1b;
+        --panel: #111a2b;
+        --line: #1e2c44;
+        --text: #eaf2ff;
+        --muted: #7d8fb0;
+        --phos: #b9ff57;        /* terminal green */
+        --magenta: #ff3ea5;     /* synthwave hot pink */
+        --cyan: #36e0ff;        /* synthwave cyan */
+        --amber: #ffb454;       /* warn */
+        --grid: rgba(255, 62, 165, 0.5);
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        background: var(--ink);
+        color: var(--text);
+        font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+        font-size: 16px; line-height: 1.55;
+        -webkit-font-smoothing: antialiased; overflow-x: hidden;
+      }
+
+      /* ===== atmosphere: synthwave grid floor + glow + scanlines + grain ===== */
+      .bg { position: fixed; inset: 0; z-index: -2; overflow: hidden; }
+      .bg .sky {
+        position: absolute; inset: 0;
+        background:
+          radial-gradient(120% 70% at 50% 0%, rgba(255,62,165,0.16), transparent 55%),
+          radial-gradient(100% 60% at 50% 100%, rgba(54,224,255,0.14), transparent 55%),
+          linear-gradient(180deg, #05060c 0%, #0a0a1c 55%, #120a22 100%);
+      }
+      .bg .grid {
+        position: absolute; left: -50%; right: -50%; bottom: -10%; height: 60%;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 44px 44px;
+        transform: perspective(340px) rotateX(72deg);
+        transform-origin: bottom center;
+        mask-image: linear-gradient(transparent, #000 40%);
+        animation: grid 14s linear infinite; opacity: 0.55;
+      }
+      @keyframes grid { to { background-position: 0 44px, 0 0; } }
+      .scan { position: fixed; inset: 0; z-index: 9998; pointer-events: none;
+        background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.03) 0 1px, transparent 1px 3px);
+        mix-blend-mode: overlay; animation: flicker 4s steps(60) infinite; }
+      @keyframes flicker { 0%,100%{opacity:.5} 7%{opacity:.35} 11%{opacity:.6} 70%{opacity:.45} }
+      .grain { position: fixed; inset: 0; z-index: 9997; pointer-events: none; opacity: 0.05;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+      /* ===== CRT power-on boot ===== */
+      #boot { position: fixed; inset: 0; z-index: 10000; background: #05060c; display: grid; place-items: center;
+        animation: bootout 0.5s ease 1.25s forwards; }
+      #boot .line { width: 70vw; max-width: 360px; height: 2px; background: var(--phos); box-shadow: 0 0 18px var(--phos);
+        animation: scanopen 1.2s ease forwards; }
+      @keyframes scanopen { 0%{transform:scaleX(0);height:2px} 60%{transform:scaleX(1);height:2px} 100%{transform:scaleX(1);height:100vh;opacity:0} }
+      @keyframes bootout { to { opacity: 0; visibility: hidden; } }
+
+      /* ===== header ===== */
+      header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 0.6em;
+        padding: max(0.7em, env(safe-area-inset-top)) 1em 0.7em;
+        background: linear-gradient(var(--ink), rgba(5,6,12,0.55)); backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--line); }
+      .brand { font-family: "VT323", monospace; font-size: 1.7rem; letter-spacing: 0.05em; color: var(--phos);
+        text-shadow: 0 0 0.5em rgba(185,255,87,0.5); }
+      .led { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--phos); box-shadow: 0 0 10px var(--phos);
+        animation: pulse 1.6s ease infinite; }
+      @keyframes pulse { 50% { opacity: 0.35; } }
+      .tag { margin-left: auto; font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.22em; }
+
+      main { max-width: 740px; margin: 0 auto; padding: 0 1em 11em; position: relative; z-index: 1; }
+
+      /* ===== hero / cold-start ===== */
+      #hero { padding: 2.8em 0 0.8em; text-align: center; }
+      .wordmark {
+        font-family: "Monoton", system-ui; font-weight: 400; line-height: 1.05;
+        font-size: clamp(2.6rem, 12vw, 5rem); margin: 0; letter-spacing: 0.02em;
+        background: linear-gradient(180deg, #fff, var(--cyan) 45%, var(--magenta));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        filter: drop-shadow(0 0 14px rgba(54,224,255,0.45)) drop-shadow(0 2px 18px rgba(255,62,165,0.4));
+        position: relative; animation: rise 0.7s 1.2s both;
+      }
+      .wordmark[data-text]::after {
+        content: attr(data-text); position: absolute; inset: 0;
+        background: linear-gradient(180deg,#fff,var(--cyan) 45%,var(--magenta));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        mix-blend-mode: screen; animation: glitch 4.5s steps(2) 2s infinite; opacity: 0.7;
+      }
+      @keyframes glitch { 0%,92%,100%{transform:none;clip-path:none} 93%{transform:translate(-3px,0)} 95%{transform:translate(3px,-1px)} 97%{transform:translate(-2px,1px)} }
+      #hero .sub { color: var(--muted); margin: 0.6em auto 0; max-width: 30ch; font-size: 0.96rem; animation: rise 0.7s 1.35s both; }
+      #hero .sub b { color: var(--phos); font-weight: 500; }
+
+      .how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5em; margin: 1.8em 0 0.4em; animation: rise 0.7s 1.5s both; }
+      .how .step { border: 1px solid var(--line); border-radius: 12px; padding: 0.8em 0.5em; background: rgba(17,26,43,0.5); }
+      .how .n { font-family: "VT323", monospace; font-size: 1.5rem; color: var(--cyan); text-shadow: 0 0 10px rgba(54,224,255,0.5); }
+      .how .t { font-size: 0.72rem; color: var(--muted); margin-top: 0.2em; line-height: 1.3; }
+
+      .prompt-q { font-size: 1.05rem; margin: 1.8em 0 0; animation: rise 0.7s 1.6s both; }
+      .prompt-q::before { content: "▶ "; color: var(--phos); }
+
+      /* ===== conversation ===== */
+      #log { display: flex; flex-direction: column; gap: 1.1em; padding-top: 1em; }
+      .turn { white-space: pre-wrap; animation: rise 0.45s ease both; }
+      .turn.user { align-self: flex-end; max-width: 88%;
+        background: linear-gradient(180deg, rgba(255,62,165,0.16), rgba(255,62,165,0.06));
+        border: 1px solid rgba(255,62,165,0.45); color: #ffe3f2;
+        padding: 0.6em 0.85em; border-radius: 13px 13px 4px 13px; }
+      .turn.user::before { content: "you · "; color: var(--magenta); font-size: 0.68rem; letter-spacing: 0.1em; }
+      .turn.assistant { color: var(--text); }
+      .turn.pending { color: var(--muted); }
+      .turn.pending::after { content: "▌"; color: var(--phos); animation: blink 1s steps(1) infinite; }
+      @keyframes blink { 50% { opacity: 0; } }
+
+      /* ===== menu cards ===== */
+      .menu { display: flex; flex-direction: column; gap: 0.5em; margin-top: 0.3em; }
+      .menu-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.18em; color: var(--cyan);
+        margin: 0.4em 0 0.3em; display: flex; align-items: center; gap: 0.6em; }
+      .menu-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+      .menu .card { display: flex; align-items: stretch; gap: 0; width: 100%;
+        border: 1px solid var(--line); border-radius: 13px; overflow: hidden;
+        background: linear-gradient(180deg, var(--panel), var(--ink-2)); animation: rise 0.4s ease both; }
+      .menu .card .body { flex: 1; display: flex; align-items: center; gap: 0.8em; text-align: left;
+        padding: 0.72em 0.5em 0.72em 0.7em; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer;
+        transition: background 0.15s ease; }
+      .menu .card .key { flex: none; display: grid; place-items: center; width: 2.1em; height: 2.1em;
+        font-family: "VT323", monospace; font-size: 1.45rem; color: var(--phos); background: var(--ink);
+        border: 1px solid var(--line); border-radius: 9px;
+        box-shadow: inset 0 -3px 0 rgba(0,0,0,0.6), 0 0 12px rgba(185,255,87,0.12); transition: transform 0.08s ease; }
+      .menu .card .label { flex: 1; }
+      .menu .card .add { flex: none; width: 3em; border: 0; border-left: 1px dashed var(--line);
+        background: rgba(54,224,255,0.05); color: var(--cyan); font-family: "VT323", monospace; font-size: 1.5rem;
+        cursor: pointer; transition: background 0.15s ease; }
+      .menu .card .add:hover { background: rgba(54,224,255,0.15); }
+      .menu .card:hover { border-color: var(--phos); box-shadow: 0 0 0 1px rgba(185,255,87,0.2), 0 8px 24px rgba(0,0,0,0.55); }
+      .menu .card .body:hover { background: rgba(185,255,87,0.05); }
+      .menu .card .body:focus-visible, .menu .card .add:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+      .menu .card .body:active .key { transform: translateY(2px); }
+      .menu .card.warn { border-color: rgba(255,180,84,0.5); }
+      .menu .card.warn .key { color: var(--amber); }
+      .menu .card.queued { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(54,224,255,0.35); }
+
+      /* ===== chain builder ===== */
+      #chainbar { position: fixed; left: 0; right: 0; bottom: calc(4.6em + env(safe-area-inset-bottom)); z-index: 25;
+        display: none; }
+      #chainbar.on { display: block; animation: rise 0.25s ease; }
+      #chainbar .inner { max-width: 740px; margin: 0 auto; padding: 0 1em; display: flex; align-items: center; gap: 0.5em; }
+      .chainwrap { flex: 1; display: flex; align-items: center; gap: 0.35em; flex-wrap: wrap;
+        background: var(--ink-2); border: 1px solid var(--cyan); border-radius: 12px; padding: 0.5em 0.7em;
+        box-shadow: 0 0 22px rgba(54,224,255,0.18); }
+      .chainwrap .lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); margin-right: 0.2em; }
+      .chainwrap .q { font-family: "VT323", monospace; font-size: 1.2rem; min-width: 1.6em; text-align: center;
+        color: var(--ink); background: var(--cyan); border-radius: 6px; padding: 0 0.3em; cursor: pointer;
+        box-shadow: 0 0 10px rgba(54,224,255,0.5); }
+      .chainwrap .arr { color: var(--muted); }
+      #runchain { flex: none; font-family: "VT323", monospace; font-size: 1.5rem; letter-spacing: 0.05em;
+        color: var(--ink); background: var(--phos); border: 0; border-radius: 12px; padding: 0.3em 0.9em; cursor: pointer;
+        box-shadow: 0 0 22px rgba(185,255,87,0.5); }
+      #runchain:active { transform: translateY(1px); }
+
+      /* ===== composer ===== */
+      #composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 24;
+        background: linear-gradient(rgba(5,6,12,0), var(--ink) 30%); padding: 1.2em 1em calc(0.8em + env(safe-area-inset-bottom)); }
+      .field { max-width: 740px; margin: 0 auto; display: flex; align-items: center; gap: 0.6em;
+        background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px; padding: 0.1em 0.9em;
+        box-shadow: 0 -10px 30px rgba(5,6,12,0.8); }
+      .field:focus-within { border-color: var(--phos); box-shadow: 0 0 0 1px rgba(185,255,87,0.3); }
+      .field .caret { color: var(--phos); font-family: "VT323", monospace; font-size: 1.45rem; text-shadow: 0 0 0.5em var(--phos); }
+      #box { flex: 1; padding: 0.9em 0; border: 0; background: transparent; color: var(--text); font: inherit; }
+      #box:focus { outline: none; } #box::placeholder { color: var(--muted); }
+      .hint { max-width: 740px; margin: 0.55em auto 0; font-size: 0.72rem; color: var(--muted); text-align: center; }
+      .hint code { color: var(--phos); background: var(--ink-2); padding: 0.05em 0.4em; border-radius: 5px; border: 1px solid var(--line); }
+
+      @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+      @media (max-width: 420px) { .how { grid-template-columns: 1fr; } }
+      @media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; } #boot { display: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="bg" aria-hidden="true"><div class="sky"></div><div class="grid"></div></div>
+    <div class="scan" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <div id="boot" aria-hidden="true"><div class="line"></div></div>
+
+    <header>
+      <span class="brand">▶ STORY MODE</span>
+      <span class="led"></span>
+      <span class="tag">choose your path</span>
+    </header>
+
+    <main>
+      <section id="hero">
+        <h1 class="wordmark" data-text="STORY MODE">STORY&nbsp;MODE</h1>
+        <p class="sub">choose-your-own-adventure for <b>AI coding</b>. every turn ends in a menu. you just tap a number.</p>
+        <div class="how">
+          <div class="step"><div class="n">1</div><div class="t">pick a number from the menu</div></div>
+          <div class="step"><div class="n">5,4,1</div><div class="t">or chain several in order</div></div>
+          <div class="step"><div class="n">∞</div><div class="t">fire a batch, walk away</div></div>
+        </div>
+        <p class="prompt-q">Where are you starting from?</p>
+      </section>
+      <div id="log" aria-live="polite" aria-atomic="false"></div>
+    </main>
+
+    <div id="chainbar">
+      <div class="inner">
+        <div class="chainwrap"><span class="lbl">chain</span><span id="chainq"></span></div>
+        <button id="runchain">RUN ▶</button>
+      </div>
+    </div>
+
+    <div id="composer">
+      <div class="field">
+        <span class="caret">▌</span>
+        <input id="box" autocomplete="off" aria-label="describe your project, or reply with a menu number"
+          placeholder="describe your project, or reply with a number (e.g. 3 or 5,4,1)" />
+      </div>
+      <div class="hint">tap a card to run it · tap <code>+</code> to queue a chain · or type <code>5,4,1</code></div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

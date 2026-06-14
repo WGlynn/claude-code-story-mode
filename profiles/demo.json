@@ -1,0 +1,19 @@
+{
+  "_comment": "Generic starter profile — the canonical move-class vocabulary, with NEUTRAL weights and NO real user's pick-history. A new user begins here; the app grows their personal weights from their own picks. The menu must span >=5 distinct classes per turn.",
+  "user": "demo",
+  "menu_rules": "Rank by LIVE CONTEXT first (current repo state, last action, open file, the message just sent), then by this profile's move-class weights, then standing moves in the tail. Never suggest into a blank canvas: with no context yet, item 1 is an orienting question, not a guessed plan. Mark outward/irreversible items (send/deploy/push/delete/post) with a leading warn flag. When the next several moves are high-confidence, low-risk, and same-thread, offer one 'story loop N' item.",
+  "signature_moves": [
+    {"key": "approve_and_continue", "weight": 1.0, "desc": "accept the result and take the obvious next step"},
+    {"key": "approve_plus_scope_escalation", "weight": 0.7, "desc": "accept, then widen the scope or chase a bigger version"},
+    {"key": "adjust_one_axis", "weight": 0.8, "desc": "run the proposed action but change one axis (scope, target, model)"},
+    {"key": "formalize_or_hookify", "weight": 0.7, "desc": "turn the working thing into a test, hook, doc, or rule"},
+    {"key": "push_public", "weight": 0.6, "desc": "commit / open a PR / publish (outward — mark warn)"},
+    {"key": "honesty_probe", "weight": 0.6, "desc": "question a claim, risk, or weak spot before continuing"},
+    {"key": "absorb_or_remember", "weight": 0.5, "desc": "save a decision, preference, or finding for later"},
+    {"key": "status_pivot", "weight": 0.5, "desc": "switch to a different thread, file, or open task"},
+    {"key": "draft_for_review", "weight": 0.5, "desc": "produce a draft to read before it goes anywhere"},
+    {"key": "strategic_inference", "weight": 0.45, "desc": "step up a level — implications, positioning, what this signals"},
+    {"key": "hold_or_defer", "weight": 0.35, "desc": "stop here and hand back (terminal)"}
+  ],
+  "standing_moves": ["status_pivot", "absorb_or_remember", "story_loop"]
+}
