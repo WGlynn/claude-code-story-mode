@@ -36,6 +36,7 @@ class ParsedReply:
 
 
 _PICKS = re.compile(r"\s*(\d{1,2}(?:\s*[,\s]\s*\d{1,2})*)\s*$")
+_LETTER_PICKS = re.compile(r"\s*([a-jA-J](?:\s*[,\s]\s*[a-jA-J])*)\s*$")
 _MODIFIER = re.compile(r"\s*(\d{1,2})\s*[:.\-]\s+(.+)", re.DOTALL)
 _LOOP = re.compile(r"story\s+loop\s+(off|\d{1,2})", re.IGNORECASE)
 
@@ -54,6 +55,17 @@ def parse_reply(prompt: str, menu_size: int = 10) -> ParsedReply:
     if lm:
         arg = lm.group(1)
         return ParsedReply(loop_n=(0 if arg == "off" else int(arg)), is_menu_reply=True)
+
+    # Letter keyspace (a-j): menu picks in collision-resistance mode, when the
+    # assistant rendered a lettered menu because its response also held a numbered
+    # content list. Letters decode to the same 1..menu_size picks; disjoint from
+    # the number keyspace by construction, so they never collide with a content
+    # selection. Guard length so prose starting with a letter isn't misread.
+    lp = _LETTER_PICKS.fullmatch(p)
+    if lp and len(p) <= 24:
+        cand = [ord(c) - 96 for c in re.findall(r"[a-j]", lp.group(1).lower())]
+        if cand and all(1 <= x <= menu_size for x in cand):
+            return ParsedReply(picks=cand, is_menu_reply=True)
 
     mm = _PICKS.fullmatch(low)
     if mm:

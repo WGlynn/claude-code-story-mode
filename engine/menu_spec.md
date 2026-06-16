@@ -51,6 +51,28 @@ the profile. The model builds the first menu from that snapshot. If there is
 genuinely no context (empty dir, no message), ask one orienting question as item
 1 rather than guessing — that is the honest cold-start, not a fabricated plan.
 
+## Collision-resistance: disjoint keyspaces
+
+A menu keyed `1`–`10` collides whenever the *response itself* contains a list the
+user picks from by number — ideas, files, search results, options to choose. A bare
+`3` is then ambiguous: did they mean menu-item 3 or content-item 3?
+
+Resolve it by construction, with two namespaces that cannot overlap:
+
+- **No content pick-list present** → standard numbered menu, titled exactly:
+  ```
+  Story Mode -- reply with a number, or chain several in order (e.g. `3` or `5,4,1`):
+  ```
+- **A content pick-list IS present** → key the menu with **letters** `a`–`j`, and
+  title it exactly:
+  ```
+  Story Mode -- reply with a letter (a-j), or chain several (e.g. `c` or `e,d,a`); bare numbers select from the list above:
+  ```
+  Numbers then decode unambiguously to the content list, letters to the menu.
+
+The model chooses the keyspace per turn based on whether it emitted its own
+numbered list. The resolver accepts either namespace (see `chained_pick.py`).
+
 ## Reply grammar (interpret against this menu next turn)
 
 - `3` → run item 3.
