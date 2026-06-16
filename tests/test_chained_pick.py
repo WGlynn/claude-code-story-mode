@@ -114,52 +114,111 @@ class TestParseReplyChainedNumbers:
 # ---------------------------------------------------------------------------
 
 class TestParseReplyLetterKeyspace:
+    # Letters are picks ONLY when the last menu was rendered in the letter keyspace
+    # (collision-resistance mode). The caller signals that with menu_keyspace="letter".
     def test_single_letter_c_maps_to_3(self):
-        r = parse_reply("c")
+        r = parse_reply("c", menu_keyspace="letter")
         assert r.is_menu_reply is True
         assert r.picks == [3]
 
     def test_letter_chain_maps_correctly(self):
         # e=5, d=4, a=1
-        r = parse_reply("e,d,a")
+        r = parse_reply("e,d,a", menu_keyspace="letter")
         assert r.is_menu_reply is True
         assert r.picks == [5, 4, 1]
 
     def test_letter_a_maps_to_1(self):
-        r = parse_reply("a")
+        r = parse_reply("a", menu_keyspace="letter")
         assert r.is_menu_reply is True
         assert r.picks == [1]
 
     def test_letter_j_maps_to_10(self):
-        r = parse_reply("j")
+        r = parse_reply("j", menu_keyspace="letter")
         assert r.is_menu_reply is True
         assert r.picks == [10]
 
     def test_uppercase_letter_accepted(self):
-        r = parse_reply("C")
+        r = parse_reply("C", menu_keyspace="letter")
         assert r.is_menu_reply is True
         assert r.picks == [3]
 
+    def test_letter_modifier(self):
+        # "c: tweak" in letter mode -> pick 3 with a modifier.
+        r = parse_reply("c: only the auth part", menu_keyspace="letter")
+        assert r.is_menu_reply is True
+        assert r.picks == [3]
+        assert r.modifier == "only the auth part"
+
     def test_out_of_range_letter_k(self):
         # 'k' is the 11th letter, outside the a-j keyspace.
-        r = parse_reply("k")
+        r = parse_reply("k", menu_keyspace="letter")
         assert r.is_menu_reply is False
 
     def test_letter_z_not_menu(self):
-        r = parse_reply("z")
+        r = parse_reply("z", menu_keyspace="letter")
         assert r.is_menu_reply is False
 
     def test_prose_starting_with_letter_not_a_pick(self):
         # Long prose beginning with a letter must not be misread as a pick.
-        r = parse_reply("can you explain how the auth flow works?")
+        r = parse_reply("can you explain how the auth flow works?", menu_keyspace="letter")
         assert r.is_menu_reply is False
 
-    def test_prose_single_word_starting_c_not_a_pick(self):
-        # "cancel" starts with 'c' but is way longer than 24 chars limit — actually
-        # it's short. The guard is len(p) <= 24, but multi-char word won't match
-        # the letter-only regex _LETTER_PICKS which requires only [a-jA-J] chars.
-        r = parse_reply("cancel")
+    def test_prose_single_word_in_a_j_range_not_a_pick(self):
+        # "bad" is all in a-j but is a word, not a pick chain (no separators) —
+        # _LETTER_PICKS requires single letters separated by commas/spaces.
+        r = parse_reply("bad", menu_keyspace="letter")
         assert r.is_menu_reply is False
+
+
+# ---------------------------------------------------------------------------
+# parse_reply — keyspace collision resistance (the core distinction)
+# ---------------------------------------------------------------------------
+
+class TestKeyspaceCollision:
+    """The number/letter distinction Story Mode is built on: a bare token must
+    decode to exactly ONE namespace, determined by which keyspace the last menu
+    used. These are the failure modes the keyspace param exists to prevent."""
+
+    def test_letter_word_not_a_pick_in_number_keyspace(self):
+        # Last menu was numbered; user typed "a" (a word). Must NOT become pick 1.
+        r = parse_reply("a")  # default menu_keyspace="number"
+        assert r.is_menu_reply is False
+        assert r.picks == []
+
+    def test_letter_i_not_a_pick_in_number_keyspace(self):
+        # "i" is also a word; must not hijack as pick 9.
+        r = parse_reply("i")
+        assert r.is_menu_reply is False
+        assert r.picks == []
+
+    def test_number_is_content_pick_in_letter_keyspace(self):
+        # Last menu was lettered (content list present); a bare number selects from
+        # the CONTENT list, not the menu.
+        r = parse_reply("3", menu_keyspace="letter")
+        assert r.is_menu_reply is False
+        assert r.content_pick is True
+        assert r.picks == []
+
+    def test_number_chain_is_content_pick_in_letter_keyspace(self):
+        r = parse_reply("5,4,1", menu_keyspace="letter")
+        assert r.is_menu_reply is False
+        assert r.content_pick is True
+
+    def test_letter_is_menu_pick_in_letter_keyspace(self):
+        r = parse_reply("c", menu_keyspace="letter")
+        assert r.is_menu_reply is True
+        assert r.picks == [3]
+        assert r.content_pick is False
+
+    def test_number_is_menu_pick_in_number_keyspace(self):
+        r = parse_reply("3")
+        assert r.is_menu_reply is True
+        assert r.picks == [3]
+        assert r.content_pick is False
+
+    def test_toggle_works_regardless_of_keyspace(self):
+        assert parse_reply("story off", menu_keyspace="letter").toggle == "off"
+        assert parse_reply("story loop 3", menu_keyspace="letter").loop_n == 3
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +544,7 @@ class TestRoundTrip:
 
     def test_letter_chain_to_resolved_order(self):
         menu = simple_menu()
-        r = parse_reply("e,d,a")  # e=5, d=4, a=1
+        r = parse_reply("e,d,a", menu_keyspace="letter")  # e=5, d=4, a=1
         assert r.is_menu_reply is True
         rc = resolve_chain(r.picks, menu)
         assert [i.n for i in rc.run_order] == [5, 4, 1]

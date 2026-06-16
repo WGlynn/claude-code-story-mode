@@ -72,9 +72,17 @@ Story Mode resolves this by construction with two namespaces that cannot overlap
   title changes to say so). A bare `3` then unambiguously picks from the content
   list; a bare `c` unambiguously picks menu-item 3.
 
-The parser in `engine/chained_pick.py` accepts either namespace. Because letters
-`a`–`j` and digits `1`–`10` are disjoint sets, there is no possible overlap between
-a menu pick and a content pick within the same turn.
+The parser in `engine/chained_pick.py` is told which keyspace the last menu used,
+via `parse_reply(prompt, menu_keyspace="number" | "letter")`. This matters in both
+directions:
+
+- In **number** mode, a bare letter is treated as prose, not a pick — so a one-word
+  reply like `a` or `i` (both English words) does not silently fire menu-item 1 or 9.
+- In **letter** mode, a bare number is flagged as a `content_pick` (a selection from
+  the response's content list), not a menu pick.
+
+Because letters `a`–`j` and digits `1`–`10` are disjoint sets *and* the parser knows
+the active keyspace, a bare token decodes to exactly one namespace every turn.
 
 ## Layout
 

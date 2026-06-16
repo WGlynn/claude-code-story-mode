@@ -71,7 +71,11 @@ Resolve it by construction, with two namespaces that cannot overlap:
   Numbers then decode unambiguously to the content list, letters to the menu.
 
 The model chooses the keyspace per turn based on whether it emitted its own
-numbered list. The resolver accepts either namespace (see `chained_pick.py`).
+numbered list. The renderer then tells the parser which keyspace was used —
+`parse_reply(prompt, menu_keyspace="number" | "letter")` — so a bare token decodes
+to exactly one namespace: in number mode a lone letter is prose (not pick 1), and in
+letter mode a lone number is a content selection (not a menu pick). See
+`chained_pick.py`.
 
 ## Reply grammar (interpret against this menu next turn)
 

@@ -33,40 +33,71 @@ class ParsedReply:
     loop_n: Optional[int] = None  # "story loop N"
     toggle: Optional[str] = None  # "on" / "off"
     is_menu_reply: bool = False   # True if this parsed as picks/modifier/loop/toggle
+    content_pick: bool = False    # a bare number that selects from a CONTENT list the
+                                  # response showed, not the (lettered) menu. The caller
+                                  # routes it to content selection, not chain execution.
 
 
 _PICKS = re.compile(r"\s*(\d{1,2}(?:\s*[,\s]\s*\d{1,2})*)\s*$")
 _LETTER_PICKS = re.compile(r"\s*([a-jA-J](?:\s*[,\s]\s*[a-jA-J])*)\s*$")
 _MODIFIER = re.compile(r"\s*(\d{1,2})\s*[:.\-]\s+(.+)", re.DOTALL)
+_LETTER_MODIFIER = re.compile(r"\s*([a-jA-J])\s*[:.\-]\s+(.+)", re.DOTALL)
 _LOOP = re.compile(r"story\s+loop\s+(off|\d{1,2})", re.IGNORECASE)
 
 
-def parse_reply(prompt: str, menu_size: int = 10) -> ParsedReply:
-    """Turn a raw user prompt into a structured reply against a menu of menu_size."""
+def parse_reply(prompt: str, menu_size: int = 10,
+                menu_keyspace: str = "number") -> ParsedReply:
+    """Turn a raw user prompt into a structured reply against the last menu.
+
+    `menu_keyspace` is the keyspace the PREVIOUS menu was rendered in, and it is
+    what makes the parse collision-proof:
+
+      - "number" (default): the menu was `1`-`10`. Bare numbers are picks; bare
+        letters are NOT picks (they are prose -- "a" and "i" are words), so a
+        letter reply parses as a non-menu message instead of hijacking pick 1/9.
+      - "letter": the menu was `a`-`j` because the response also carried a numbered
+        content list. Letters are picks; a bare NUMBER is a selection from that
+        content list (content_pick=True, not a menu reply) so the two namespaces
+        never collide.
+
+    Pass the keyspace the renderer actually used last turn. Toggles and `story
+    loop N` are keyspace-independent and always recognized.
+    """
     p = (prompt or "").strip()
     low = p.lower()
 
+    # Keyspace-independent commands.
     if low in ("story off", "story mode off"):
         return ParsedReply(toggle="off", is_menu_reply=True)
     if low in ("story on", "story mode on", "activate story mode"):
         return ParsedReply(toggle="on", is_menu_reply=True)
-
     lm = _LOOP.fullmatch(low)
     if lm:
         arg = lm.group(1)
         return ParsedReply(loop_n=(0 if arg == "off" else int(arg)), is_menu_reply=True)
 
-    # Letter keyspace (a-j): menu picks in collision-resistance mode, when the
-    # assistant rendered a lettered menu because its response also held a numbered
-    # content list. Letters decode to the same 1..menu_size picks; disjoint from
-    # the number keyspace by construction, so they never collide with a content
-    # selection. Guard length so prose starting with a letter isn't misread.
-    lp = _LETTER_PICKS.fullmatch(p)
-    if lp and len(p) <= 24:
-        cand = [ord(c) - 96 for c in re.findall(r"[a-j]", lp.group(1).lower())]
-        if cand and all(1 <= x <= menu_size for x in cand):
-            return ParsedReply(picks=cand, is_menu_reply=True)
+    if menu_keyspace == "letter":
+        # Letters are menu picks; numbers belong to the content list, not the menu.
+        lp = _LETTER_PICKS.fullmatch(p)
+        if lp and len(p) <= 24:
+            cand = [ord(c) - 96 for c in re.findall(r"[a-j]", lp.group(1).lower())]
+            if cand and all(1 <= x <= menu_size for x in cand):
+                return ParsedReply(picks=cand, is_menu_reply=True)
+        lmod = _LETTER_MODIFIER.match(p)
+        if lmod:
+            n = ord(lmod.group(1).lower()) - 96
+            if 1 <= n <= menu_size:
+                return ParsedReply(picks=[n], modifier=lmod.group(2).strip(),
+                                   is_menu_reply=True)
+        # A bare number here selects from the content list -> not a menu reply.
+        mm = _PICKS.fullmatch(low)
+        if mm:
+            cand = [int(x) for x in re.findall(r"\d{1,2}", mm.group(1))]
+            if cand and all(1 <= x <= menu_size for x in cand):
+                return ParsedReply(content_pick=True, is_menu_reply=False)
+        return ParsedReply(is_menu_reply=False)
 
+    # Number keyspace (default): numbers are picks; letters are prose, not picks.
     mm = _PICKS.fullmatch(low)
     if mm:
         cand = [int(x) for x in re.findall(r"\d{1,2}", mm.group(1))]
