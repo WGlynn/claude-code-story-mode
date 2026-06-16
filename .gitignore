@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
 
 # internal continuity notes — not part of the public release
 HANDOFF.md

@@ -59,6 +59,23 @@ an already-done item is skipped. Outward/irreversible items (`send`, `deploy`,
 `push`, `delete`, `post`) are marked `⚠` so a phone-tapper sees the consequence
 before tapping.
 
+### Collision-resistance: disjoint keyspaces
+
+A numbered menu collides whenever the response itself contains a numbered list the
+user might also pick from. A bare `3` is then ambiguous: menu-item 3 or content-item 3?
+
+Story Mode resolves this by construction with two namespaces that cannot overlap:
+
+- **No content list present** — standard numbered menu (`1`–`10`). A bare `3`
+  unambiguously means menu-item 3.
+- **A content list IS present** — the menu switches to letter keys `a`–`j` (the
+  title changes to say so). A bare `3` then unambiguously picks from the content
+  list; a bare `c` unambiguously picks menu-item 3.
+
+The parser in `engine/chained_pick.py` accepts either namespace. Because letters
+`a`–`j` and digits `1`–`10` are disjoint sets, there is no possible overlap between
+a menu pick and a content pick within the same turn.
+
 ## Layout
 
 ```
@@ -72,6 +89,12 @@ web/             v1 standalone web app (reimplements the loop; calls Claude API)
   index.html  app.js  server.js
 docs/
   lastmenu-design.md  paraphrase-detection (flagship v2 feature, designed)
+```
+
+## Tests
+
+```bash
+python -m pytest -q tests/
 ```
 
 ## Run the web app (skeleton)
