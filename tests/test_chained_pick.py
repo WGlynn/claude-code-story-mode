@@ -282,6 +282,12 @@ class TestParseReplyStoryLoop:
         assert r.is_menu_reply is True
         assert r.loop_n == 10
 
+    def test_story_loop_capped_at_max(self):
+        # The engine caps autonomous iterations so a gate-less caller can't run 99.
+        r = parse_reply("story loop 99")
+        assert r.is_menu_reply is True
+        assert r.loop_n == 20
+
 
 # ---------------------------------------------------------------------------
 # parse_reply — story on / off toggles
@@ -484,6 +490,19 @@ class TestResolveChainNoOp:
         menu = simple_menu()
         rc = resolve_chain([1, 2], menu, already_done=None)
         assert [i.n for i in rc.run_order] == [1, 2]
+
+    def test_duplicate_pick_in_reply_runs_once(self):
+        # "3,3" must run item 3 a single time; the repeat is dropped.
+        menu = simple_menu()
+        rc = resolve_chain([3, 3], menu)
+        assert [i.n for i in rc.run_order] == [3]
+        reasons = [r for _, r in rc.dropped]
+        assert any("duplicate" in r.lower() for r in reasons)
+
+    def test_duplicate_among_distinct_picks(self):
+        menu = simple_menu()
+        rc = resolve_chain([1, 2, 1, 3], menu)
+        assert [i.n for i in rc.run_order] == [1, 2, 3]
 
 
 # ---------------------------------------------------------------------------

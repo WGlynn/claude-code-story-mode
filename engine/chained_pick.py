@@ -44,6 +44,8 @@ _MODIFIER = re.compile(r"\s*(\d{1,2})\s*[:.\-]\s+(.+)", re.DOTALL)
 _LETTER_MODIFIER = re.compile(r"\s*([a-jA-J])\s*[:.\-]\s+(.+)", re.DOTALL)
 _LOOP = re.compile(r"story\s+loop\s+(off|\d{1,2})", re.IGNORECASE)
 
+MAX_LOOP = 20  # hard ceiling on autonomous self-play iterations (safety)
+
 
 def parse_reply(prompt: str, menu_size: int = 10,
                 menu_keyspace: str = "number") -> ParsedReply:
@@ -74,7 +76,8 @@ def parse_reply(prompt: str, menu_size: int = 10,
     lm = _LOOP.fullmatch(low)
     if lm:
         arg = lm.group(1)
-        return ParsedReply(loop_n=(0 if arg == "off" else int(arg)), is_menu_reply=True)
+        n = 0 if arg == "off" else min(int(arg), MAX_LOOP)  # cap autonomous iterations
+        return ParsedReply(loop_n=n, is_menu_reply=True)
 
     if menu_keyspace == "letter":
         # Letters are menu picks; numbers belong to the content list, not the menu.
@@ -129,7 +132,8 @@ def resolve_chain(picks: list[int], menu: dict[int, MenuItem],
                           exclusive; the LATER one wins, the earlier is dropped.
       3. TERMINAL       — a hold/stop item runs after everything before it, then
                           halts; picks after it are dropped.
-      4. NO-OP/REPEAT   — a pick already satisfied this session is skipped.
+      4. NO-OP/REPEAT   — a pick already satisfied this session is skipped; a pick
+                          repeated within this same reply runs once (later dup dropped).
     (Dependency reordering and partial-failure halting are runtime concerns the
     executor handles; this resolves the static intent of the reply.)
     """
@@ -143,10 +147,14 @@ def resolve_chain(picks: list[int], menu: dict[int, MenuItem],
         if item and item.conflict_group:
             last_in_group[item.conflict_group] = n
 
+    seen: set[int] = set()  # de-dup repeats within this one reply ("3,3" runs 3 once)
     for n in picks:
         item = menu.get(n)
         if item is None:
             out.dropped.append((n, "no such menu item"))
+            continue
+        if n in seen:
+            out.dropped.append((n, "duplicate pick in this reply"))
             continue
         if n in already_done:
             out.dropped.append((n, "already done this session"))
@@ -155,6 +163,7 @@ def resolve_chain(picks: list[int], menu: dict[int, MenuItem],
             out.dropped.append((n, f"superseded by later pick in '{item.conflict_group}'"))
             continue
         out.run_order.append(item)
+        seen.add(n)
         if item.terminal:
             out.stop_after = True
             # everything after a terminal item is dropped
