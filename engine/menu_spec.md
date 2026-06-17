@@ -86,5 +86,23 @@ letter mode a lone number is a content selection (not a menu pick). See
   stop and hand back on an ambiguous fork, an outward/irreversible action, or a
   repeat.
 
-See `chained_pick.py` for the full resolution contract (literal order;
-later-wins on contradiction; terminal item halts; skip already-done).
+### The chained-pick contract (8 rules, precedence order)
+
+A chain like `5,4,1` is resolved by these rules. Contradiction and terminal are
+decided *before* anything runs; failure and no-op are handled *during* execution.
+
+| # | Rule | Behavior |
+|---|------|----------|
+| 1 | **Literal order** (presumption) | Run items in the typed sequence, not numeric order — order encodes intent. Rule 8 is the only sanctioned override. |
+| 2 | **Contradiction** | If two picks are mutually exclusive (an action and its hold/negation, or two divergent pivots), the LATER item wins; drop the earlier and state in one line what was dropped and why. Never run both. |
+| 3 | **Terminal** | If a pick is a hold/stop/react-first item, run everything before it, then STOP and hand back; drop and note any items after it. |
+| 4 | **Dependency** | Keep the typed order; only if that order makes an item impossible (it needs a later item's result that won't exist yet) run the prerequisite first, and note the reorder. |
+| 5 | **Partial failure** | If an item fails, STOP the chain, report what completed, surface the failure, show a fresh menu. Do NOT blind-continue past a broken premise. |
+| 6 | **No-op / repeat** | Skip any item already satisfied this session (and note it); a pick repeated within the same reply runs once. |
+| 7 | **Confirmation** | An explicitly-picked item IS authorization — do not re-ask, even for an outward/irreversible (`⚠`) action. EXCEPTION: if resolving a contradiction (2) or dependency (4) routes into an outward/irreversible action the user did NOT cleanly choose, pause and confirm. |
+| 8 | **Sensible reorder** (default ON) | The executor MAY reorder the chain when it objectively improves the outcome WITHOUT changing intent (run a capture/commit/verify step after the items it must capture; dedup before an expensive step) — UNLESS the user signalled a strict order. Always state any reorder in one line. |
+
+Rules 1, 2, 3, and 6 are decided statically in `chained_pick.py:resolve_chain`
+from the picks and menu metadata. Rules 4, 5, 7, and 8 depend on runtime outcomes
+or judgment and are enforced by the executor as it walks the resolved `run_order`
+(see the docstring in `chained_pick.py` for the layer split).

@@ -5,6 +5,8 @@ response, the assistant ends with a ranked menu of the ten most likely things
 you'd want next. Reply with a number. Or chain several — `5,4,1` runs them in
 that order. Navigate an entire build from a phone with one thumb.
 
+> **👉 New here / not a terminal user? Open the [`BEGINNERS START HERE!!!!!!`](./BEGINNERS%20START%20HERE!!!!!!/) folder.** No install, no download button — just copy-paste into Claude or ChatGPT.
+
 ![Story Mode — the cold-start screen](docs/screenshot.png)
 
 > Status: v1 scaffold. The **engine** (menu grammar, chained-pick contract,

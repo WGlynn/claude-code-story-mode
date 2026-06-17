@@ -126,16 +126,47 @@ def resolve_chain(picks: list[int], menu: dict[int, MenuItem],
                   already_done: Optional[set[int]] = None) -> ResolvedChain:
     """Apply the chained-pick contract to a list of picked menu numbers.
 
-    Rules (order matters):
-      1. LITERAL order  — run in the typed sequence, not numeric.
-      2. CONTRADICTION  — two picks in the same conflict_group are mutually
-                          exclusive; the LATER one wins, the earlier is dropped.
-      3. TERMINAL       — a hold/stop item runs after everything before it, then
-                          halts; picks after it are dropped.
-      4. NO-OP/REPEAT   — a pick already satisfied this session is skipped; a pick
+    The full contract is 8 rules (the same set the terminal hook injects). They
+    split into two layers: rules this *static* resolver decides from the picks +
+    menu metadata alone, and rules the *executor* (the layer that actually runs
+    each item, possibly via an LLM) must enforce at runtime because they depend on
+    outcomes or judgment that don't exist until execution.
+
+    Decided here (static, deterministic, tested):
+      1. LITERAL ORDER (presumption) — run in the typed sequence, not numeric.
+      2. CONTRADICTION — two picks in the same conflict_group are mutually
+                         exclusive; the LATER one wins, the earlier is dropped.
+      3. TERMINAL — a hold/stop item runs after everything before it, then halts;
+                    picks after it are dropped (`stop_after=True`).
+      6. NO-OP / REPEAT — a pick already satisfied this session is skipped; a pick
                           repeated within this same reply runs once (later dup dropped).
-    (Dependency reordering and partial-failure halting are runtime concerns the
-    executor handles; this resolves the static intent of the reply.)
+
+    Enforced by the executor at runtime (documented here so the contract is whole):
+      4. DEPENDENCY — keep the typed order; only if that order makes an item
+                      impossible (it needs an earlier-listed item's result that
+                      won't exist yet) run the prerequisite first and note the
+                      reorder. Needs runtime knowledge of what each item produces.
+      5. PARTIAL FAILURE — if an item fails, STOP the chain, report what completed,
+                           surface the failure, show a fresh menu. Never
+                           blind-continue past a broken premise. Failure is only
+                           known once an item runs.
+      7. CONFIRMATION — an explicitly-picked item IS authorization; do not re-ask,
+                        even for an outward/irreversible (`warn`) item. EXCEPTION:
+                        if resolving a contradiction (rule 2) or dependency (rule 4)
+                        would route into an outward/irreversible action the user did
+                        NOT cleanly choose, pause and confirm first.
+      8. SENSIBLE REORDER (default ON) — the executor MAY reorder the chain when it
+                        objectively improves the outcome WITHOUT changing intent
+                        (e.g. run a capture/commit/verify step AFTER the items it
+                        must capture; dedup before an expensive step) — UNLESS the
+                        user signalled a strict order. Always state any reorder in
+                        one line. Rule 1 is the presumption; rule 8 is the sanctioned
+                        override of it, exercised transparently in the user's favor.
+
+    This function therefore resolves the static intent of the reply (which items
+    survive, in what order, and whether to halt after a terminal item). Rules 4, 5,
+    7, and 8 ride on `run_order` / `dropped` / `stop_after` plus each item's `warn`
+    flag, and are applied by the executor as it walks `run_order`.
     """
     already_done = already_done or set()
     out = ResolvedChain()
